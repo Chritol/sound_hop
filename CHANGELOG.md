@@ -8,6 +8,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- Troubleshooting log at `%APPDATA%\SoundHop\soundhop.log` ("Open log file" in the tray menu), and a notice
+  when a device has neither "default" nor "communications" ticked.
+- Settings window: choose and order devices, rename them, set hotkeys with a hotkey box, pick default /
+  communications roles, cycle hotkeys, autostart and notifications. Opens on first start, from the tray menu,
+  or by starting the exe again.
 - Tray icon with a menu to switch the default output and input device; the current device is ticked and
   unavailable devices are greyed out.
 - "Manage devices" submenu to choose which Windows devices SoundHop shows.
@@ -20,3 +25,9 @@ All notable changes to this project are documented here. The format is based on
 - Start with Windows option.
 - TOML config at `%APPDATA%\SoundHop\config.toml` with safe writes and recovery from broken files.
 - ADRs 0001-0009, README, architecture guide, agent instructions, GitHub Actions CI and release workflow.
+
+### Fixed
+
+- A device could end up with neither "default" nor "communications" ticked, so picking it did nothing. The
+  settings window now only changes a field when you edit that field, refuses to save such a device, and
+  existing configs are repaired on load (the device becomes a default device).

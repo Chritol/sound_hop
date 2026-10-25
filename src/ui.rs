@@ -5,11 +5,14 @@
 //! so the rest of the code can use normal Rust `&str` and `String`.
 
 use windows::core::{w, PCWSTR};
-use windows::Win32::Foundation::HINSTANCE;
-use windows::Win32::Foundation::HWND;
+use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM, WPARAM};
+use windows::Win32::Graphics::Gdi::HFONT;
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::HiDpi::GetDpiForSystem;
-use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_ICONWARNING, MB_OK};
+use windows::Win32::UI::WindowsAndMessaging::{
+    CreateWindowExW, GetWindowTextLengthW, GetWindowTextW, MessageBoxW, SendMessageW, SetWindowTextW, HMENU,
+    MB_ICONERROR, MB_ICONWARNING, MB_OK, WINDOW_EX_STYLE, WINDOW_STYLE, WM_SETFONT,
+};
 
 /// Converts a Rust string into a null-terminated UTF-16 buffer for Win32.
 pub fn wide(s: &str) -> Vec<u16> {
@@ -36,6 +39,65 @@ pub fn hinstance() -> HINSTANCE {
 pub fn scale(v: i32) -> i32 {
     let dpi = unsafe { GetDpiForSystem() } as i32;
     v * dpi / 96
+}
+
+/// `SendMessageW` with plain integers.
+pub fn send(hwnd: HWND, msg: u32, wparam: usize, lparam: isize) -> isize {
+    unsafe { SendMessageW(hwnd, msg, Some(WPARAM(wparam)), Some(LPARAM(lparam))).0 }
+}
+
+pub fn set_text(hwnd: HWND, text: &str) {
+    let buf = wide(text);
+    unsafe {
+        let _ = SetWindowTextW(hwnd, PCWSTR(buf.as_ptr()));
+    }
+}
+
+pub fn get_text(hwnd: HWND) -> String {
+    unsafe {
+        let len = GetWindowTextLengthW(hwnd);
+        if len <= 0 {
+            return String::new();
+        }
+        let mut buf = vec![0u16; len as usize + 1];
+        let n = GetWindowTextW(hwnd, &mut buf);
+        String::from_utf16_lossy(&buf[..n as usize])
+    }
+}
+
+/// Creates a child control. `rect` is (x, y, width, height) at 100% scale
+/// and gets scaled to the screen's DPI.
+#[allow(clippy::too_many_arguments)]
+pub fn control(
+    parent: HWND,
+    class: PCWSTR,
+    text: &str,
+    style: u32,
+    ex_style: u32,
+    (x, y, w, h): (i32, i32, i32, i32),
+    id: usize,
+    font: HFONT,
+) -> HWND {
+    let text = wide(text);
+    unsafe {
+        let hwnd = CreateWindowExW(
+            WINDOW_EX_STYLE(ex_style),
+            class,
+            PCWSTR(text.as_ptr()),
+            WINDOW_STYLE(style),
+            scale(x),
+            scale(y),
+            scale(w),
+            scale(h),
+            Some(parent),
+            Some(HMENU(id as *mut _)),
+            Some(hinstance()),
+            None,
+        )
+        .unwrap_or_default();
+        send(hwnd, WM_SETFONT, font.0 as usize, 1);
+        hwnd
+    }
 }
 
 pub fn error_box(owner: Option<HWND>, text: &str) {
