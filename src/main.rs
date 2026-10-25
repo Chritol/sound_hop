@@ -7,6 +7,7 @@
 //! - `config`    the TOML settings file
 //! - `hotkey`    hotkey text <-> Windows key codes
 //! - `osd`       the small on-screen notice
+//! - `settings`  the settings window
 //! - `autostart` "Start with Windows"
 //! - `ui`        small Win32 helpers
 
@@ -27,6 +28,8 @@ mod config;
 mod hotkey;
 #[cfg(windows)]
 mod osd;
+#[cfg(windows)]
+mod settings;
 #[cfg(windows)]
 mod ui;
 

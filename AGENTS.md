@@ -58,7 +58,7 @@ the maintainer to test on Windows.
 ## Layout
 
 ```
-src/            app.rs audio.rs config.rs hotkey.rs osd.rs autostart.rs ui.rs main.rs
+src/            app.rs audio.rs config.rs hotkey.rs osd.rs settings.rs autostart.rs ui.rs main.rs
 res/            icon, manifest, .rc (embedded by build.rs)
 docs/           architecture.md, adr/
 .github/        CI (build, test, release on tag v*), copilot-instructions.md

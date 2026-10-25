@@ -8,6 +8,9 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- Settings window: choose and order devices, rename them, set hotkeys with a hotkey box, pick default /
+  communications roles, cycle hotkeys, autostart and notifications. Opens on first start, from the tray menu,
+  or by starting the exe again.
 - Tray icon with a menu to switch the default output and input device; the current device is ticked and
   unavailable devices are greyed out.
 - "Manage devices" submenu to choose which Windows devices SoundHop shows.

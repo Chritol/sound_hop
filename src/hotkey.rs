@@ -8,6 +8,12 @@ pub const MOD_CONTROL: u32 = 0x2;
 pub const MOD_SHIFT: u32 = 0x4;
 pub const MOD_WIN: u32 = 0x8;
 
+/// Modifier flags in the format the settings window's hotkey box uses
+/// (`HOTKEYF_*`). Windows uses a different bit order here, so we convert.
+const HOTKEYF_SHIFT: u16 = 0x1;
+const HOTKEYF_CONTROL: u16 = 0x2;
+const HOTKEYF_ALT: u16 = 0x4;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Hotkey {
     pub mods: u32,
@@ -141,6 +147,55 @@ impl Hotkey {
     }
 }
 
+impl Hotkey {
+    /// Converts from the value of a Windows hotkey box (`HKM_GETHOTKEY`).
+    pub fn from_control(value: u16) -> Option<Hotkey> {
+        let vk = (value & 0xFF) as u32;
+        if vk == 0 {
+            return None;
+        }
+        let f = value >> 8;
+        let mut mods = 0;
+        if f & HOTKEYF_SHIFT != 0 {
+            mods |= MOD_SHIFT;
+        }
+        if f & HOTKEYF_CONTROL != 0 {
+            mods |= MOD_CONTROL;
+        }
+        if f & HOTKEYF_ALT != 0 {
+            mods |= MOD_ALT;
+        }
+        Some(Hotkey { mods, vk })
+    }
+
+    /// Converts to the value a Windows hotkey box takes (`HKM_SETHOTKEY`).
+    /// The box cannot show the Windows key, so that modifier is dropped.
+    pub fn to_control(self) -> u16 {
+        let mut f = 0;
+        if self.mods & MOD_SHIFT != 0 {
+            f |= HOTKEYF_SHIFT;
+        }
+        if self.mods & MOD_CONTROL != 0 {
+            f |= HOTKEYF_CONTROL;
+        }
+        if self.mods & MOD_ALT != 0 {
+            f |= HOTKEYF_ALT;
+        }
+        (f << 8) | (self.vk as u16 & 0xFF)
+    }
+}
+
+/// The first unused default hotkey for a newly added device:
+/// `Ctrl+Alt+1..9` for outputs, `Ctrl+Alt+Shift+1..9` for inputs.
+/// Returns an empty string if all nine are taken.
+pub fn free_default(for_output: bool, used: &[Hotkey]) -> String {
+    let prefix = if for_output { "Ctrl+Alt+" } else { "Ctrl+Alt+Shift+" };
+    (1..=9)
+        .map(|n| format!("{prefix}{n}"))
+        .find(|t| Hotkey::parse(t).is_some_and(|h| !used.contains(&h)))
+        .unwrap_or_default()
+}
+
 /// Normalizes hotkey text, e.g. `ctrl+alt+1` becomes `Ctrl+Alt+1`.
 /// Invalid text is returned unchanged so it can be reported.
 pub fn normalize(text: &str) -> String {
@@ -162,6 +217,22 @@ mod tests {
         assert!(Hotkey::parse("").is_none());
         assert!(Hotkey::parse("Ctrl+Foo").is_none());
         assert!(Hotkey::parse("Hyper+A").is_none());
+    }
+
+    #[test]
+    fn control_round_trip() {
+        let h = Hotkey::parse("Ctrl+Shift+M").unwrap();
+        assert_eq!(Hotkey::from_control(h.to_control()), Some(h));
+        assert_eq!(Hotkey::from_control(0), None);
+    }
+
+    #[test]
+    fn free_default_skips_used() {
+        let used = [Hotkey::parse("Ctrl+Alt+1").unwrap(), Hotkey::parse("Ctrl+Alt+2").unwrap()];
+        assert_eq!(free_default(true, &used), "Ctrl+Alt+3");
+        assert_eq!(free_default(false, &used), "Ctrl+Alt+Shift+1");
+        let all: Vec<Hotkey> = (1..=9).map(|n| Hotkey::parse(&format!("Ctrl+Alt+{n}")).unwrap()).collect();
+        assert_eq!(free_default(true, &all), "");
     }
 
     #[test]

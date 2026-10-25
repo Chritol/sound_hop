@@ -22,9 +22,9 @@ use windows::Win32::UI::Shell::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu, DestroyWindow, DispatchMessageW,
-    GetCursorPos, GetMessageW, GetSystemMetrics, KillTimer, PostMessageW, PostQuitMessage, RegisterClassExW,
-    RegisterWindowMessageW, SetForegroundWindow, SetTimer, TrackPopupMenuEx, TranslateMessage, HICON, HMENU,
-    MF_CHECKED, MF_DISABLED, MF_GRAYED, MF_POPUP, MF_SEPARATOR, MF_STRING, MSG, SM_MENUDROPALIGNMENT, SW_SHOWNORMAL,
+    GetMessageW, GetSystemMetrics, KillTimer, PostMessageW, PostQuitMessage, RegisterClassExW, RegisterWindowMessageW,
+    SetForegroundWindow, SetMenuDefaultItem, SetTimer, TrackPopupMenuEx, TranslateMessage, HICON, HMENU, MF_CHECKED,
+    MF_DISABLED, MF_GRAYED, MF_POPUP, MF_SEPARATOR, MF_STRING, MSG, SM_MENUDROPALIGNMENT, SW_SHOWNORMAL,
     TPM_BOTTOMALIGN, TPM_LEFTALIGN, TPM_RETURNCMD, TPM_RIGHTALIGN, TPM_RIGHTBUTTON, WINDOW_EX_STYLE, WM_APP,
     WM_CONTEXTMENU, WM_DESTROY, WM_HOTKEY, WM_NULL, WM_TIMER, WNDCLASSEXW, WS_OVERLAPPED,
 };
@@ -34,12 +34,14 @@ use crate::autostart;
 use crate::config::{self, Config, DeviceEntry, LoadResult};
 use crate::hotkey::Hotkey;
 use crate::osd::{self, GLYPH_MIC, GLYPH_SPEAKER, GLYPH_WARNING};
+use crate::settings;
 use crate::ui::{copy_to_fixed, hinstance, warning_box, wide};
 
 const CLASS: PCWSTR = w!("SoundHopMain");
 const WM_TRAY: u32 = WM_APP + 1;
 const WM_DEVICES_CHANGED: u32 = WM_APP + 2;
 const WM_SECOND_INSTANCE: u32 = WM_APP + 3;
+const WM_SETTINGS_CLOSED: u32 = WM_APP + 4;
 const TIMER_DEVICES: usize = 1;
 /// Device notifications come in bursts; wait this long for things to settle.
 const DEVICE_SETTLE_MS: u32 = 300;
@@ -58,6 +60,7 @@ enum Action {
     SelectCommunications(Flow, usize),
     /// Add or remove a device from the managed list.
     ToggleManaged(Flow, String, String),
+    OpenSettings,
     OpenConfig,
     ReloadConfig,
     ToggleAutostart,
@@ -169,11 +172,15 @@ unsafe fn run_inner() -> Result<()> {
         warning_box(None, &problem);
     }
     if first_run {
-        osd::show(GLYPH_SPEAKER, "SoundHop is running", "Click the tray icon to add your devices", 4000);
+        open_settings();
     }
 
     let mut msg = MSG::default();
     while GetMessageW(&mut msg, None, 0, 0).as_bool() {
+        // Tab, Enter and Esc in the settings window.
+        if settings::dialog_message(&msg) {
+            continue;
+        }
         let _ = TranslateMessage(&msg);
         DispatchMessageW(&msg);
     }
@@ -201,7 +208,9 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
             // With NOTIFYICON_VERSION_4 the event is in the low word of lParam
             // and the click position is packed into wParam.
             let event = (lparam.0 & 0xFFFF) as u32;
-            if event == NIN_SELECT || event == NIN_KEYSELECT || event == WM_CONTEXTMENU {
+            // While the settings window is open, the tray brings it forward
+            // instead, so the two cannot make conflicting changes.
+            if (event == NIN_SELECT || event == NIN_KEYSELECT || event == WM_CONTEXTMENU) && !settings::focus() {
                 let x = (wparam.0 & 0xFFFF) as i16 as i32;
                 let y = ((wparam.0 >> 16) & 0xFFFF) as i16 as i32;
                 show_menu(hwnd, POINT { x, y });
@@ -220,11 +229,18 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
             LRESULT(0)
         }
         WM_SECOND_INSTANCE => {
-            let mut pt = POINT::default();
-            unsafe {
-                let _ = GetCursorPos(&mut pt);
-            }
-            show_menu(hwnd, pt);
+            open_settings();
+            LRESULT(0)
+        }
+        WM_SETTINGS_CLOSED => {
+            let saved = wparam.0 != 0;
+            with_app(|app| {
+                if saved {
+                    app.reload_config(true);
+                } else {
+                    app.register_hotkeys(true);
+                }
+            });
             LRESULT(0)
         }
         WM_DESTROY => {
@@ -240,7 +256,26 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
     }
 }
 
+/// Opens the settings window. Hotkeys are switched off while it is open, so
+/// pressing a combination in a hotkey box sets it instead of switching.
+fn open_settings() {
+    if settings::focus() {
+        return;
+    }
+    let Some((hwnd, snapshot)) = with_app(|app| {
+        app.unregister_hotkeys();
+        (app.hwnd, app.snapshot())
+    }) else {
+        return;
+    };
+    settings::open(hwnd, WM_SETTINGS_CLOSED, snapshot);
+}
+
 fn perform(action: Action) {
+    if let Action::OpenSettings = action {
+        open_settings();
+        return;
+    }
     if let Action::Exit = action {
         let hwnd = with_app(|app| app.hwnd);
         if let Some(hwnd) = hwnd {
@@ -432,6 +467,8 @@ impl App {
                 }
             }
             b.submenu(menu, "Manage devices", manage);
+            b.item(menu, "Settings...", Action::OpenSettings, false, true);
+            let _ = SetMenuDefaultItem(menu, b.actions.len() as u32, 0);
             b.separator(menu);
             b.item(menu, "Edit config file", Action::OpenConfig, false, true);
             b.item(menu, "Reload config file", Action::ReloadConfig, false, true);
@@ -471,7 +508,7 @@ impl App {
                     warning_box(Some(self.hwnd), &format!("Could not change the autostart setting:\n\n{e}"));
                 }
             }
-            Action::Exit => {}
+            Action::OpenSettings | Action::Exit => {}
         }
     }
 
@@ -606,15 +643,9 @@ impl App {
         self.save_config();
     }
 
-    /// First unused `Ctrl+Alt+1..9` (outputs) or `Ctrl+Alt+Shift+1..9`
-    /// (inputs), so newly added devices work right away.
     fn free_default_hotkey(&self, flow: Flow) -> String {
-        let prefix = if flow == Flow::Output { "Ctrl+Alt+" } else { "Ctrl+Alt+Shift+" };
         let used: Vec<Hotkey> = self.all_hotkey_texts().iter().filter_map(|t| Hotkey::parse(t)).collect();
-        (1..=9)
-            .map(|n| format!("{prefix}{n}"))
-            .find(|t| Hotkey::parse(t).is_some_and(|h| !used.contains(&h)))
-            .unwrap_or_default()
+        crate::hotkey::free_default(flow == Flow::Output, &used)
     }
 
     fn all_hotkey_texts(&self) -> Vec<String> {
@@ -674,12 +705,7 @@ impl App {
     /// (Re)registers every hotkey from the config. Problems (typos, keys
     /// already taken by another program) are shown once if `report` is set.
     fn register_hotkeys(&mut self, report: bool) {
-        unsafe {
-            for id in 1..=self.hotkeys.len() {
-                let _ = UnregisterHotKey(Some(self.hwnd), id as i32);
-            }
-        }
-        self.hotkeys.clear();
+        self.unregister_hotkeys();
 
         let mut wanted: Vec<(String, Action, String)> = Vec::new();
         let g = &self.config.general;
@@ -711,6 +737,26 @@ impl App {
         }
         if report && !problems.is_empty() {
             osd::show(GLYPH_WARNING, "Hotkey problem", &problems.join("; "), 5000);
+        }
+    }
+
+    fn unregister_hotkeys(&mut self) {
+        unsafe {
+            for id in 1..=self.hotkeys.len() {
+                let _ = UnregisterHotKey(Some(self.hwnd), id as i32);
+            }
+        }
+        self.hotkeys.clear();
+    }
+
+    fn snapshot(&self) -> settings::Snapshot {
+        settings::Snapshot {
+            config: self.config.clone(),
+            devices: [self.audio.list(Flow::Output), self.audio.list(Flow::Input)],
+            defaults: [
+                self.audio.default_id(Flow::Output, Role::Default),
+                self.audio.default_id(Flow::Input, Role::Default),
+            ],
         }
     }
 

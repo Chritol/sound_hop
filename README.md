@@ -7,7 +7,7 @@ Switch your Windows audio devices with one hotkey or one click, instead of diggi
 SoundHop sits in the tray, uses a few MB of RAM and no CPU while idle, and switches the default playback or
 recording device instantly. It is a single ~0.5 MB exe with no installer, no runtime and no admin rights.
 
-> Status: early MVP (0.1.0). A settings window is next; until then a few things are set in a text file.
+> Status: early version (0.1.0). Feedback welcome.
 
 ## Features
 
@@ -23,6 +23,7 @@ recording device instantly. It is a single ~0.5 MB exe with no installer, no run
   the next available device in your list. When it comes back you can pick it again.
 - **Short on-screen notice** after each switch (can be turned off). It never steals focus.
 - **Start with Windows** option.
+- **Settings window** for everything: devices, names, hotkeys, cycle order, options.
 
 ## Install
 
@@ -33,17 +34,20 @@ recording device instantly. It is a single ~0.5 MB exe with no installer, no run
 
 ## Usage
 
-1. Tray icon, then **Manage devices**, then tick the devices you want. Each newly ticked device gets the next
-   free hotkey.
-2. Pick a device from the menu, or press its hotkey.
-3. Optional: **Start with Windows** in the same menu.
+1. On first start the settings window opens. Tick the devices you want on the **Output devices** and **Input
+   devices** tabs. Each newly ticked device gets the next free hotkey. Rename them, change hotkeys or the
+   cycle order there, then **Save**.
+2. Pick a device from the tray menu, or press its hotkey.
+3. Optional: **Start with Windows** on the **General** tab or in the tray menu.
 
-Running `sound_hop.exe` again while it is running opens its menu at the mouse position.
+Quick changes without the window: tray menu, **Manage devices**. To open the settings again: tray menu,
+**Settings...**, or start `sound_hop.exe` again.
 
 ## Configuration
 
-Settings live in `%APPDATA%\SoundHop\config.toml`. Use **Edit config file** in the tray menu, save, then
-**Reload config file** (changes are also picked up the next time the menu opens).
+The settings window covers everything. For the curious, settings live in `%APPDATA%\SoundHop\config.toml`
+and can also be edited by hand: **Edit config file** in the tray menu, save, then **Reload config file**
+(changes are also picked up the next time the menu opens).
 
 ```toml
 [general]
@@ -94,11 +98,6 @@ See [`docs/architecture.md`](docs/architecture.md) for how it works and
 [`docs/adr/`](docs/adr/README.md) for why it is built this way.
 
 ## Roadmap
-
-Next:
-
-- Settings window: manage devices, rename them, set hotkeys with a hotkey box, all options. No file editing
-  needed.
 
 Nice-to-haves (not planned yet):
 

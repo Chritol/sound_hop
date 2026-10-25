@@ -13,3 +13,4 @@ Format: [MADR](https://adr.github.io/madr/). Copy [`template.md`](template.md) f
 | [0007](0007-global-hotkeys.md) | Global hotkeys with RegisterHotKey | accepted |
 | [0008](0008-mvp-scope.md) | MVP scope and what comes next | accepted |
 | [0009](0009-build-and-release.md) | Build, CI and releases | accepted |
+| [0010](0010-settings-window.md) | Settings window from standard Win32 controls | accepted |
