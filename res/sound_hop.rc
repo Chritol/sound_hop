@@ -1,0 +1,34 @@
+// Resources embedded into sound_hop.exe by build.rs.
+// Numeric constants are used instead of #include <windows.h> so the same file
+// compiles with MSVC rc.exe and MinGW windres.
+
+1 ICON "sound_hop.ico"
+
+// 24 = RT_MANIFEST, 1 = CREATEPROCESS_MANIFEST_RESOURCE_ID
+1 24 "sound_hop.manifest"
+
+1 VERSIONINFO
+FILEVERSION 0,1,0,0
+PRODUCTVERSION 0,1,0,0
+FILEOS 0x40004
+FILETYPE 0x1
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904b0"
+    BEGIN
+      VALUE "CompanyName", "SoundHop contributors"
+      VALUE "FileDescription", "SoundHop audio device switcher"
+      VALUE "FileVersion", "0.1.0"
+      VALUE "InternalName", "sound_hop"
+      VALUE "LegalCopyright", "MIT License"
+      VALUE "OriginalFilename", "sound_hop.exe"
+      VALUE "ProductName", "SoundHop"
+      VALUE "ProductVersion", "0.1.0"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1200
+  END
+END
