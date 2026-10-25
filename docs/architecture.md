@@ -12,7 +12,9 @@ SoundHop is one Rust binary with no GUI framework. It talks to Windows directly 
 | `src/audio.rs` | Core Audio: list devices, read/set the default device (`IPolicyConfig`), device change notifications. |
 | `src/config.rs` | The TOML settings file: types, load, safe save. Platform independent, unit tested. |
 | `src/hotkey.rs` | `"Ctrl+Alt+1"` text to/from Windows key codes. Platform independent, unit tested. |
+| `src/settings.rs` | The settings window (tabs, device lists, hotkey boxes); exists only while open. |
 | `src/osd.rs` | The on-screen notice window (created on demand, self-destroys). |
+| `src/log.rs` | Troubleshooting log (`log!` macro), size-capped, written line by line. |
 | `src/autostart.rs` | "Start with Windows" via `HKCU\...\Run`. |
 | `src/ui.rs` | Small helpers: UTF-16 strings, DPI scaling, message boxes, theme detection. |
 | `build.rs`, `res/` | Embeds icon, manifest and version info into the exe. |
@@ -45,7 +47,11 @@ SoundHop is one Rust binary with no GUI framework. It talks to Windows directly 
   `eMultimedia` (Default Device) or `eCommunications`.
 - **Config**: loaded at start; reloaded when the menu opens and the file's modification time changed, or via
   "Reload config file". Every change made from the menu is saved immediately.
-- **Single instance**: a named mutex. A second start posts a message to the first, which opens its menu.
+- **Settings window**: `settings::open` receives a snapshot (config, devices, current defaults) and edits it in
+  memory. Hotkeys are unregistered while it is open and the tray icon only brings it forward. On close it posts
+  `WM_SETTINGS_CLOSED` (with "saved" in `wParam`); the app reloads the config and re-registers hotkeys. The
+  message loop passes messages through `IsDialogMessageW` for Tab/Enter/Esc.
+- **Single instance**: a named mutex. A second start posts a message to the first, which opens the settings.
 
 ## Error handling
 
@@ -81,7 +87,7 @@ language; these are the Rust-specific parts.
 
 | Metric | Target | Notes |
 |--------|--------|-------|
-| Exe size | < 1 MB | 0.5 MB for 0.1.0 (MinGW build). |
+| Exe size | < 1 MB | About 0.55 MB for 0.1.0 (MinGW build). |
 | Idle RAM | < 10 MB | To be measured on Windows 11 (Task Manager, "Memory (active private working set)"). |
 | Idle CPU | 0 % | No timers or polling while idle; only Windows messages wake the thread. |
 | Hotkey to switch | < 100 ms | `SetDefaultEndpoint` is synchronous and fast. |
