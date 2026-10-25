@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy,rustfmt
+          rustup default stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test
+
+      - name: Build release exe
+        run: cargo build --release
+
+      - name: Report size
+        shell: pwsh
+        run: "'sound_hop.exe: {0:N0} bytes' -f (Get-Item target/release/sound_hop.exe).Length"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sound_hop
+          path: target/release/sound_hop.exe
+
+  release:
+    # Push a tag like v0.1.0 to publish the exe as a GitHub release.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: sound_hop
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" sound_hop.exe --repo "${GITHUB_REPOSITORY}" --title "SoundHop ${GITHUB_REF_NAME}" --generate-notes
