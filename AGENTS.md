@@ -52,13 +52,15 @@ the maintainer to test on Windows.
   Never hold the borrow across a modal call (`TrackPopupMenuEx`, `MessageBoxW`); Windows re-enters `wndproc`
   during those.
 - Callbacks from Windows threads (e.g. `IMMNotificationClient`) only `PostMessageW` to the main window.
+- Log user actions, Windows calls that change state, and their results with `log!` so bug reports come
+  with `soundhop.log`.
 - Everything the user sees is plain English, short, and says what to do next.
 - Commits: imperative summary line (`Add cycle hotkey for inputs`), body explains why.
 
 ## Layout
 
 ```
-src/            app.rs audio.rs config.rs hotkey.rs osd.rs settings.rs autostart.rs ui.rs main.rs
+src/            app.rs audio.rs config.rs hotkey.rs log.rs osd.rs settings.rs autostart.rs ui.rs main.rs
 res/            icon, manifest, .rc (embedded by build.rs)
 docs/           architecture.md, adr/
 .github/        CI (build, test, release on tag v*), copilot-instructions.md

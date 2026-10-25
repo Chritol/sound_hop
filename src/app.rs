@@ -62,6 +62,7 @@ enum Action {
     ToggleManaged(Flow, String, String),
     OpenSettings,
     OpenConfig,
+    OpenLog,
     ReloadConfig,
     ToggleAutostart,
     ToggleNotifications,
@@ -162,7 +163,9 @@ unsafe fn run_inner() -> Result<()> {
     let app =
         App { hwnd, audio, config, config_mtime: config_mtime(), hotkeys: Vec::new(), last: Default::default(), icon };
     APP.with(|cell| *cell.borrow_mut() = Some(app));
+    log!("SoundHop {} started, config {}", env!("CARGO_PKG_VERSION"), config::path().display());
     with_app(|app| {
+        app.log_state("startup");
         app.remember_defaults();
         app.add_tray_icon();
         app.register_hotkeys(true);
@@ -199,6 +202,7 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
     match msg {
         WM_HOTKEY => {
             let action = with_app(|app| app.hotkeys.get(wparam.0.wrapping_sub(1)).cloned()).flatten();
+            log!("hotkey id {} -> {:?}", wparam.0, action);
             if let Some(action) = action {
                 perform(action);
             }
@@ -218,6 +222,7 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
             LRESULT(0)
         }
         WM_DEVICES_CHANGED => {
+            // Only the first of a burst matters; the timer below handles the rest.
             unsafe { SetTimer(Some(hwnd), TIMER_DEVICES, DEVICE_SETTLE_MS, None) };
             LRESULT(0)
         }
@@ -314,6 +319,7 @@ fn show_menu(hwnd: HWND, at: POINT) {
         let _ = DestroyMenu(menu);
         if cmd > 0 {
             if let Some(action) = actions.get(cmd - 1).cloned() {
+                log!("menu -> {:?}", action);
                 perform(action);
             }
         }
@@ -472,6 +478,7 @@ impl App {
             b.separator(menu);
             b.item(menu, "Edit config file", Action::OpenConfig, false, true);
             b.item(menu, "Reload config file", Action::ReloadConfig, false, true);
+            b.item(menu, "Open log file", Action::OpenLog, false, true);
             b.item(
                 menu,
                 "Show notifications",
@@ -498,6 +505,19 @@ impl App {
             }
             Action::ToggleManaged(flow, id, name) => self.toggle_managed(flow, id, name),
             Action::OpenConfig => self.open_config(),
+            Action::OpenLog => {
+                let path = wide(&crate::log::path().to_string_lossy());
+                unsafe {
+                    ShellExecuteW(
+                        Some(self.hwnd),
+                        w!("open"),
+                        w!("notepad.exe"),
+                        PCWSTR(path.as_ptr()),
+                        PCWSTR::null(),
+                        SW_SHOWNORMAL,
+                    );
+                }
+            }
             Action::ReloadConfig => self.reload_config(true),
             Action::ToggleNotifications => {
                 self.config.general.show_notification = !self.config.general.show_notification;
@@ -518,9 +538,24 @@ impl App {
 
     /// Switches to a managed device using its configured roles.
     fn select(&mut self, flow: Flow, i: usize) {
-        let Some(entry) = self.entries(flow).get(i).cloned() else { return };
-        if !self.audio.is_available(&entry.id) {
+        let Some(entry) = self.entries(flow).get(i).cloned() else {
+            log!("select {flow:?} #{i}: no such entry");
+            return;
+        };
+        let available = self.audio.is_available(&entry.id);
+        log!(
+            "select {flow:?} #{i} \"{}\" id={} available={available} set_default={} set_communications={}",
+            entry.display_name(),
+            entry.id,
+            entry.set_default,
+            entry.set_communications
+        );
+        if !available {
             self.notify_with(GLYPH_WARNING, "Not available", entry.display_name());
+            return;
+        }
+        if !entry.set_default && !entry.set_communications {
+            self.notify_with(GLYPH_WARNING, entry.display_name(), "Neither default nor communications is ticked");
             return;
         }
         let mut switched = false;
@@ -558,10 +593,17 @@ impl App {
     fn switch(&mut self, flow: Flow, entry: &DeviceEntry, role: Role) -> bool {
         match self.audio.set_default(&entry.id, role) {
             Ok(()) => {
+                let now = self.audio.default_id(flow, role);
+                log!(
+                    "  set {flow:?}/{role:?} -> {}: ok, Windows now reports {}",
+                    entry.id,
+                    now.as_deref().unwrap_or("none")
+                );
                 self.last[flow.index()][role.index()] = Some(entry.id.clone());
                 true
             }
             Err(e) => {
+                log!("  set {flow:?}/{role:?} -> {}: FAILED {:?} {}", entry.id, e.code(), e.message());
                 self.notify_with(GLYPH_WARNING, "Could not switch", &e.message());
                 false
             }
@@ -585,6 +627,31 @@ impl App {
     // Unplugged devices
     // -----------------------------------------------------------------------
 
+    /// Writes the devices, managed entries and current defaults to the log.
+    fn log_state(&self, why: &str) {
+        log!("state ({why}):");
+        for flow in Flow::ALL {
+            let present = self.audio.list(flow);
+            for d in &present {
+                log!("  {flow:?} device \"{}\" id={}", d.name, d.id);
+            }
+            for (i, e) in self.entries(flow).iter().enumerate() {
+                log!(
+                    "  {flow:?} managed #{i} \"{}\" id={} available={} hotkey=\"{}\" default={} comms={}",
+                    e.display_name(),
+                    e.id,
+                    self.audio.is_available(&e.id),
+                    e.hotkey,
+                    e.set_default,
+                    e.set_communications
+                );
+            }
+            for role in Role::ALL {
+                log!("  {flow:?}/{role:?} default: {}", self.audio.default_id(flow, role).as_deref().unwrap_or("none"));
+            }
+        }
+    }
+
     fn remember_defaults(&mut self) {
         for flow in Flow::ALL {
             for role in Role::ALL {
@@ -597,6 +664,7 @@ impl App {
     /// If a managed device that was in use vanished, move to the next
     /// available managed device instead of whatever Windows picked.
     fn on_devices_changed(&mut self) {
+        self.log_state("devices changed");
         for flow in Flow::ALL {
             for role in Role::ALL {
                 let last = self.last[flow.index()][role.index()].clone();
@@ -606,6 +674,7 @@ impl App {
                 });
                 if let Some(pos) = gone {
                     let lost = self.entries(flow)[pos].display_name().to_string();
+                    log!("  {flow:?}/{role:?}: \"{lost}\" disappeared, falling back");
                     if let Some(next) = self.next_available(flow, Some(pos)) {
                         let entry = self.entries(flow)[next].clone();
                         if self.switch(flow, &entry, role) {
@@ -731,6 +800,7 @@ impl App {
             let ok = unsafe {
                 RegisterHotKey(Some(self.hwnd), id, HOT_KEY_MODIFIERS(hk.mods) | MOD_NOREPEAT, hk.vk).is_ok()
             };
+            log!("hotkey {} ({what}) id {id}: {}", hk.to_text(), if ok { "registered" } else { "FAILED" });
             if !ok {
                 problems.push(format!("{} ({what}) is already used by another program", hk.to_text()));
             }

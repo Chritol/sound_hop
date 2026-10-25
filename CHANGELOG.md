@@ -8,6 +8,8 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- Troubleshooting log at `%APPDATA%\SoundHop\soundhop.log` ("Open log file" in the tray menu), and a notice
+  when a device has neither "default" nor "communications" ticked.
 - Settings window: choose and order devices, rename them, set hotkeys with a hotkey box, pick default /
   communications roles, cycle hotkeys, autostart and notifications. Opens on first start, from the tray menu,
   or by starting the exe again.

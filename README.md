@@ -81,6 +81,12 @@ Hotkey format: modifiers `Ctrl`, `Alt`, `Shift`, `Win` joined with `+`, then a k
 
 If the file has an error, SoundHop tells you, keeps it as `config.toml.broken` and starts with defaults.
 
+## Troubleshooting
+
+SoundHop writes a small log to `%APPDATA%\SoundHop\soundhop.log` (tray menu: **Open log file**). It lists
+your devices, every hotkey and menu action, and what Windows reported after each switch. Attach it when
+reporting a problem. It is capped at 256 KB.
+
 ## Build from source
 
 ```sh

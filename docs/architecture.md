@@ -14,6 +14,7 @@ SoundHop is one Rust binary with no GUI framework. It talks to Windows directly 
 | `src/hotkey.rs` | `"Ctrl+Alt+1"` text to/from Windows key codes. Platform independent, unit tested. |
 | `src/settings.rs` | The settings window (tabs, device lists, hotkey boxes); exists only while open. |
 | `src/osd.rs` | The on-screen notice window (created on demand, self-destroys). |
+| `src/log.rs` | Troubleshooting log (`log!` macro), size-capped, written line by line. |
 | `src/autostart.rs` | "Start with Windows" via `HKCU\...\Run`. |
 | `src/ui.rs` | Small helpers: UTF-16 strings, DPI scaling, message boxes, theme detection. |
 | `build.rs`, `res/` | Embeds icon, manifest and version info into the exe. |

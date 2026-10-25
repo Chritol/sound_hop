@@ -9,6 +9,7 @@
 //! - `osd`       the small on-screen notice
 //! - `settings`  the settings window
 //! - `autostart` "Start with Windows"
+//! - `log`       troubleshooting log file
 //! - `ui`        small Win32 helpers
 
 // Build as a GUI app: no console window pops up.
@@ -18,6 +19,10 @@
 
 // The Windows-only parts are left out on other systems, so `cargo test` can
 // run the platform-independent unit tests (config, hotkeys) anywhere.
+// `log` comes first so its `log!` macro can be used by the modules below.
+#[cfg(windows)]
+#[macro_use]
+mod log;
 #[cfg(windows)]
 mod app;
 #[cfg(windows)]
