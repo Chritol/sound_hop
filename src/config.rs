@@ -101,7 +101,10 @@ pub fn load() -> LoadResult {
     };
     // `match` on a Result is like a Kotlin `when` over a sealed class.
     match toml::from_str::<Config>(&text) {
-        Ok(config) => LoadResult::Loaded(config),
+        Ok(mut config) => {
+            config.repair();
+            LoadResult::Loaded(config)
+        }
         Err(e) => {
             let _ = std::fs::rename(&path, path.with_extension("toml.broken"));
             LoadResult::Broken(e.to_string())
@@ -119,6 +122,19 @@ pub fn save(config: &Config) -> Result<(), String> {
     let tmp = path().with_extension("toml.tmp");
     std::fs::write(&tmp, format!("{header}{text}")).map_err(|e| e.to_string())?;
     std::fs::rename(&tmp, path()).map_err(|e| e.to_string())
+}
+
+impl Config {
+    /// Fixes values that cannot work. A device with neither "default" nor
+    /// "communications" set would do nothing when picked (version 0.1.0's
+    /// settings window could save that), so it becomes a default device.
+    pub fn repair(&mut self) {
+        for e in self.outputs.iter_mut().chain(self.inputs.iter_mut()) {
+            if !e.set_default && !e.set_communications {
+                e.set_default = true;
+            }
+        }
+    }
 }
 
 impl DeviceEntry {
@@ -148,6 +164,19 @@ mod tests {
         let back: Config = toml::from_str(&text).unwrap();
         assert_eq!(back.outputs[0].name, "FiiO K5 Pro");
         assert!(back.outputs[0].set_default);
+    }
+
+    #[test]
+    fn repair_turns_on_default_when_no_role_is_set() {
+        let mut c: Config = toml::from_str(
+            "[[outputs]]\nid = \"a\"\nset_default = false\nset_communications = false\n\
+             [[outputs]]\nid = \"b\"\nset_default = false\nset_communications = true\n",
+        )
+        .unwrap();
+        c.repair();
+        assert!(c.outputs[0].set_default);
+        assert!(!c.outputs[1].set_default);
+        assert!(c.outputs[1].set_communications);
     }
 
     #[test]

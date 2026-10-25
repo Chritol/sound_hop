@@ -224,6 +224,9 @@ struct DevicePage {
     details: Vec<HWND>,
     rows: Vec<Row>,
     selected: Option<usize>,
+    /// The row whose values the "Selected device" box currently shows. Edits
+    /// in the box only ever go to this row.
+    shown: Option<usize>,
 }
 
 struct GeneralPage {
@@ -674,6 +677,7 @@ impl DevicePage {
             details: Vec::new(),
             rows,
             selected: None,
+            shown: None,
         };
         page.details =
             vec![name_label, page.name, hotkey_label, page.hotkey.hwnd, page.clear, page.set_default, page.set_comms];
@@ -734,9 +738,11 @@ impl DevicePage {
         }
     }
 
-    /// Shows the selected row in the "Selected device" box.
+    /// Shows the selected row in the "Selected device" box. Callers commit
+    /// the hotkey box first (`commit_hotkey`) if the user may have typed in it.
     fn load_details(&mut self) {
-        let row = self.selected.and_then(|i| self.rows.get(i));
+        self.shown = self.selected.filter(|&i| i < self.rows.len());
+        let row = self.shown.map(|i| &self.rows[i]);
         let managed = row.is_some_and(|r| r.managed);
         match row {
             Some(r) => {
@@ -761,18 +767,34 @@ impl DevicePage {
         enable(self.down, self.selected.is_some() && i + 1 < self.rows.len());
     }
 
-    /// Copies the "Selected device" box back into the selected row.
-    fn commit_details(&mut self) {
-        let Some(i) = self.selected else { return };
-        let Some(row) = self.rows.get_mut(i) else { return };
-        if !row.managed {
-            return;
-        }
+    /// The shown row, if the user may edit it (only managed devices).
+    fn shown_row(&mut self) -> Option<(usize, &mut Row)> {
+        let i = self.shown?;
+        let row = self.rows.get_mut(i)?;
+        row.managed.then_some((i, row))
+    }
+
+    // Each control writes only its own field of the shown row, when the user
+    // changes it, so the box can never copy one row's values into another.
+
+    fn commit_name(&mut self) {
         let name = get_text(self.name);
+        let Some((i, row)) = self.shown_row() else { return };
         row.entry.name = if name.trim().is_empty() { row.windows_name.clone() } else { name.trim().to_string() };
-        row.entry.hotkey = self.hotkey.text();
-        row.entry.set_default = is_checked(self.set_default);
-        row.entry.set_communications = is_checked(self.set_comms);
+        self.update_row_text(i);
+    }
+
+    fn commit_flags(&mut self) {
+        let (set_default, set_comms) = (is_checked(self.set_default), is_checked(self.set_comms));
+        let Some((_, row)) = self.shown_row() else { return };
+        row.entry.set_default = set_default;
+        row.entry.set_communications = set_comms;
+    }
+
+    fn commit_hotkey(&mut self) {
+        let text = self.hotkey.text();
+        let Some((i, row)) = self.shown_row() else { return };
+        row.entry.hotkey = text;
         self.update_row_text(i);
     }
 
@@ -782,9 +804,10 @@ impl DevicePage {
         if j < 0 || j as usize >= self.rows.len() {
             return;
         }
-        self.commit_details();
+        self.commit_hotkey();
         self.rows.swap(i, j as usize);
         self.selected = Some(j as usize);
+        self.shown = self.selected;
         self.fill_list();
         self.load_details();
     }
@@ -832,7 +855,7 @@ impl GeneralPage {
 impl Settings {
     fn show_page(&mut self, index: usize) {
         for page in &mut self.pages {
-            page.commit_details();
+            page.commit_hotkey();
         }
         let panels = [self.pages[0].panel, self.pages[1].panel, self.general.panel];
         for (i, &panel) in panels.iter().enumerate() {
@@ -880,11 +903,12 @@ impl Settings {
             BN_CLICKED if ctl == page.down => page.move_selected(1),
             BN_CLICKED if ctl == page.clear => {
                 page.hotkey.clear();
-                page.commit_details();
+                page.commit_hotkey();
             }
             BN_CLICKED if ctl == page.cycle_clear => page.cycle.clear(),
-            BN_CLICKED if ctl == page.set_default || ctl == page.set_comms => page.commit_details(),
-            EN_CHANGE if ctl == page.name || ctl == page.hotkey.hwnd => page.commit_details(),
+            BN_CLICKED if ctl == page.set_default || ctl == page.set_comms => page.commit_flags(),
+            EN_CHANGE if ctl == page.name => page.commit_name(),
+            EN_CHANGE if ctl == page.hotkey.hwnd => page.commit_hotkey(),
             _ => {}
         }
     }
@@ -902,9 +926,13 @@ impl Settings {
             let managed = (nm.new_state & LVIS_STATEIMAGEMASK) >> 12 == 2;
             let used = self.used_hotkeys();
             let page = &mut self.pages[p];
-            page.commit_details();
+            page.commit_hotkey();
             if let Some(row) = page.rows.get_mut(i) {
                 row.managed = managed;
+                // A device must do something when picked.
+                if managed && !row.entry.set_default && !row.entry.set_communications {
+                    row.entry.set_default = true;
+                }
                 if managed && row.entry.hotkey.trim().is_empty() {
                     row.entry.hotkey = hotkey::free_default(page.flow == Flow::Output, &used);
                 }
@@ -918,7 +946,7 @@ impl Settings {
         // Selection changed.
         if nm.new_state & LVIS_SELECTED != 0 && nm.old_state & LVIS_SELECTED == 0 {
             let page = &mut self.pages[p];
-            page.commit_details();
+            page.commit_hotkey();
             page.selected = Some(i);
             page.load_details();
         }
@@ -936,7 +964,24 @@ impl Settings {
     /// Validates and writes the settings. Returns `true` if the window can close.
     fn save(&mut self) -> bool {
         for page in &mut self.pages {
-            page.commit_details();
+            page.commit_hotkey();
+        }
+
+        // Every managed device must do something when picked.
+        for page in &self.pages {
+            if let Some(row) =
+                page.rows.iter().find(|r| r.managed && !r.entry.set_default && !r.entry.set_communications)
+            {
+                warning_box(
+                    Some(self.hwnd),
+                    &format!(
+                        "\"{}\" has neither \"default device\" nor \"communications device\" ticked, so picking \
+                         it would do nothing.\n\nPlease tick at least one of them.",
+                        row.entry.display_name()
+                    ),
+                );
+                return false;
+            }
         }
 
         // Every hotkey may be used only once.

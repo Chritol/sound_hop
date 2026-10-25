@@ -25,3 +25,9 @@ All notable changes to this project are documented here. The format is based on
 - Start with Windows option.
 - TOML config at `%APPDATA%\SoundHop\config.toml` with safe writes and recovery from broken files.
 - ADRs 0001-0009, README, architecture guide, agent instructions, GitHub Actions CI and release workflow.
+
+### Fixed
+
+- A device could end up with neither "default" nor "communications" ticked, so picking it did nothing. The
+  settings window now only changes a field when you edit that field, refuses to save such a device, and
+  existing configs are repaired on load (the device becomes a default device).
