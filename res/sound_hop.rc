@@ -21,7 +21,7 @@ BEGIN
       VALUE "FileDescription", "SoundHop audio device switcher"
       VALUE "FileVersion", "0.1.0"
       VALUE "InternalName", "sound_hop"
-      VALUE "LegalCopyright", "MIT License"
+      VALUE "LegalCopyright", "Copyright (c) 2026 Chritol. GPL-3.0"
       VALUE "OriginalFilename", "sound_hop.exe"
       VALUE "ProductName", "SoundHop"
       VALUE "ProductVersion", "0.1.0"

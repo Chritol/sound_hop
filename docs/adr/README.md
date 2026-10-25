@@ -14,3 +14,4 @@ Format: [MADR](https://adr.github.io/madr/). Copy [`template.md`](template.md) f
 | [0008](0008-mvp-scope.md) | MVP scope and what comes next | accepted |
 | [0009](0009-build-and-release.md) | Build, CI and releases | accepted |
 | [0010](0010-settings-window.md) | Settings window from standard Win32 controls | accepted |
+| [0011](0011-license-gpl3.md) | License: GPL-3.0 instead of MIT | accepted |

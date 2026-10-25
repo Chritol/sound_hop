@@ -26,6 +26,11 @@ All notable changes to this project are documented here. The format is based on
 - TOML config at `%APPDATA%\SoundHop\config.toml` with safe writes and recovery from broken files.
 - ADRs 0001-0009, README, architecture guide, agent instructions, GitHub Actions CI and release workflow.
 
+### Changed
+
+- License changed from MIT to GPL-3.0: SoundHop stays free and open source, and anyone who distributes it,
+  modified or not, must share the source under the same license ([ADR 0011](docs/adr/0011-license-gpl3.md)).
+
 ### Fixed
 
 - A device could end up with neither "default" nor "communications" ticked, so picking it did nothing. The

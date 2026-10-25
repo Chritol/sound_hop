@@ -3,7 +3,7 @@ name = "sound_hop"
 version = "0.1.0"
 edition = "2021"
 description = "Tiny Windows tray app for switching audio devices with hotkeys"
-license = "MIT"
+license = "GPL-3.0-only"
 repository = "https://github.com/Chritol/sound_hop"
 build = "build.rs"
 
