@@ -122,4 +122,6 @@ update could break it. Details in [ADR 0003](docs/adr/0003-ipolicyconfig.md).
 
 ## License
 
-[MIT](LICENSE)
+Copyright (c) 2026 Chritol. SoundHop is free software under the [GNU GPL v3](LICENSE): you may use, change and
+share it, also commercially, but anything you distribute that is based on it must be released under the same
+license with its source code. Reasons in [ADR 0011](docs/adr/0011-license-gpl3.md).
