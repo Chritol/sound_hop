@@ -29,8 +29,15 @@ recording device instantly. It is a single ~0.5 MB exe with no installer, no run
 
 1. Download `sound_hop.exe` from the [latest release](https://github.com/Chritol/sound_hop/releases).
 2. Put it somewhere permanent, e.g. `%LOCALAPPDATA%\Programs\SoundHop\`.
-3. Run it. Windows SmartScreen may warn because the exe is not signed: "More info" then "Run anyway".
+3. Run it. Until releases are signed, Windows SmartScreen may warn: "More info" then "Run anyway". Some
+   antivirus programs flag new unsigned exes; add an exception for the folder from step 2. See the
+   [code signing policy](docs/code-signing.md).
 4. Click the tray icon (you may need to drag it out of the hidden icons area to keep it visible).
+
+## Uninstall
+
+1. Turn off **Start with Windows** (tray menu), then **Exit**.
+2. Delete `sound_hop.exe` and the folder `%APPDATA%\SoundHop` (settings and log).
 
 ## Usage
 
@@ -112,7 +119,7 @@ Nice-to-haves (not planned yet):
 - Volume and mute hotkeys for the current device.
 - Per-app output routing.
 - Dark-mode settings window.
-- Signed exe, winget / Scoop package.
+- winget / Scoop package.
 
 ## How it changes the default device
 

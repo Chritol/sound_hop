@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SignPath artifact configuration: paste this into the SignPath project.
+     GitHub delivers the uploaded artifact as a ZIP that contains sound_hop.exe. -->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <zip-file>
+    <pe-file path="sound_hop.exe" product-name="SoundHop">
+      <authenticode-sign />
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

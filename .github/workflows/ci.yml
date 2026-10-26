@@ -12,6 +12,9 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    outputs:
+      # The uploaded exe's ID, so the release job can send it to SignPath.
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
     steps:
       - uses: actions/checkout@v4
 
@@ -39,6 +42,7 @@ jobs:
         run: "'sound_hop.exe: {0:N0} bytes' -f (Get-Item target/release/sound_hop.exe).Length"
 
       - uses: actions/upload-artifact@v4
+        id: upload
         with:
           name: sound_hop
           path: target/release/sound_hop.exe
@@ -50,12 +54,35 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: read
     steps:
-      - uses: actions/download-artifact@v4
+      # Signed by SignPath Foundation once the SignPath variables and secret are set in the repository
+      # settings (see docs/code-signing.md). Without them the release falls back to the unsigned exe.
+      - name: Sign with SignPath
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          github-artifact-id: ${{ needs.build.outputs.artifact-id }}
+          wait-for-completion: true
+          # Every release needs a manual approval in SignPath; allow time for it.
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signed
+
+      - name: Use unsigned exe
+        if: vars.SIGNPATH_ORGANIZATION_ID == ''
+        uses: actions/download-artifact@v4
         with:
           name: sound_hop
+          path: signed
 
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${GITHUB_REF_NAME}" sound_hop.exe --repo "${GITHUB_REPOSITORY}" --title "SoundHop ${GITHUB_REF_NAME}" --generate-notes
+        run: >-
+          gh release create "${GITHUB_REF_NAME}" signed/sound_hop.exe
+          --repo "${GITHUB_REPOSITORY}" --title "SoundHop ${GITHUB_REF_NAME}" --generate-notes
+          --notes "[Code signing policy](https://github.com/${GITHUB_REPOSITORY}/blob/main/docs/code-signing.md)"
