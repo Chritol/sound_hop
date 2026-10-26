@@ -28,6 +28,9 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- Releases can be code-signed through SignPath Foundation once the project is accepted
+  ([code signing policy](docs/code-signing.md), [ADR 0012](docs/adr/0012-code-signing-signpath.md)).
+
 - License changed from MIT to GPL-3.0: SoundHop stays free and open source, and anyone who distributes it,
   modified or not, must share the source under the same license ([ADR 0011](docs/adr/0011-license-gpl3.md)).
 

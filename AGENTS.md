@@ -63,6 +63,7 @@ the maintainer to test on Windows.
 src/            app.rs audio.rs config.rs hotkey.rs log.rs osd.rs settings.rs autostart.rs ui.rs main.rs
 res/            icon, manifest, .rc (embedded by build.rs)
 docs/           architecture.md, adr/
-.github/        CI (build, test, release on tag v*), copilot-instructions.md
+.github/        CI (build, test, signed release on tag v*), copilot-instructions.md
+.signpath/      SignPath artifact configuration (code signing, see docs/code-signing.md)
 .claude/skills/ new-adr skill
 ```
